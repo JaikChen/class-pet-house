@@ -1,0 +1,14 @@
+{
+  "apps": [{
+    "name": "class-pet-house",
+    "script": "src/server.js",
+    "cwd": "/var/www/class-pet-house/backend",
+    "env": {
+      "NODE_ENV": "production",
+      "PORT": 3000
+    },
+    "instances": 1,
+    "autorestart": true,
+    "max_memory_restart": "500M"
+  }]
+}

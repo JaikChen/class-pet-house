@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "启动后端 (Backend)",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "isBackground": true,
+      "presentation": {
+        "group": "dev-runner",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "启动前端 (Frontend)",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "isBackground": true,
+      "presentation": {
+        "group": "dev-runner",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🚀 一键启动班级宠物屋",
+      "dependsOn": [
+        "启动后端 (Backend)",
+        "启动前端 (Frontend)"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "shared",
+        "reveal": "always"
+      }
+    }
+  ]
+}

@@ -8,3 +8,4 @@ dist/
 localhost.session.sql
 package-lock.json
 .npmrc
+/assets

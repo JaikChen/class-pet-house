@@ -6,6 +6,11 @@ const { createCanvas, loadImage } = require('canvas');
 const archiver = require('archiver');
 const path = require('path');
 
+// 架构师基建：异步错误捕获包装器
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+
 // 生成单个证书 PNG
 async function generateCertificate(student, badge, template, date) {
   const width = 800, height = 1130;
@@ -111,89 +116,86 @@ async function generateSticker(student, badge) {
 }
 
 // 单个学生导出
-router.post('/certificate', auth, requireActivated, async (req, res) => {
-  try {
-    const { student_id, badge_indexes, type, date } = req.body;
-    const student = await Student.findByPk(student_id);
-    if (!student) return res.status(404).json({ error: '学生不存在' });
+router.post('/certificate', auth, requireActivated, asyncHandler(async (req, res) => {
+  const { student_id, badge_indexes, type, date } = req.body;
+  const student = await Student.findByPk(student_id);
+  if (!student) return res.status(404).json({ error: '学生不存在' });
 
-    const cls = await Class.findOne({ where: { id: student.class_id, user_id: req.userId } });
-    if (!cls) return res.status(403).json({ error: '无权限' });
+  const cls = await Class.findOne({ where: { id: student.class_id, user_id: req.userId } });
+  if (!cls) return res.status(403).json({ error: '无权限' });
 
-    const badges = student.badges || [];
-    const indexes = badge_indexes || badges.map((_, i) => i);
-    const exportDate = date || new Date().toISOString().split('T')[0];
+  const badges = student.badges || [];
+  const indexes = badge_indexes || badges.map((_, i) => i);
+  const exportDate = date || new Date().toISOString().split('T')[0];
 
-    if (indexes.length === 1) {
-      const badge = badges[indexes[0]];
-      if (!badge) return res.status(400).json({ error: '徽章不存在' });
+  if (indexes.length === 1) {
+    const badge = badges[indexes[0]];
+    if (!badge) return res.status(400).json({ error: '徽章不存在' });
 
-      const gen = type === 'sticker' ? generateSticker : generateCertificate;
-      const buf = type === 'sticker'
-        ? await gen(student, badge)
-        : await gen(student, badge, 'gold', exportDate);
+    const gen = type === 'sticker' ? generateSticker : generateCertificate;
+    const buf = type === 'sticker'
+      ? await gen(student, badge)
+      : await gen(student, badge, 'gold', exportDate);
 
-      res.set('Content-Type', 'image/png');
-      res.set('Content-Disposition', `attachment; filename="${student.name}_${type || 'cert'}.png"`);
-      return res.send(buf);
-    }
-
-    // 多个徽章 → ZIP
-    res.set('Content-Type', 'application/zip');
-    res.set('Content-Disposition', `attachment; filename="${student.name}_export.zip"`);
-    const archive = archiver('zip');
-    archive.pipe(res);
-
-    for (const idx of indexes) {
-      const badge = badges[idx];
-      if (!badge) continue;
-      const certBuf = await generateCertificate(student, badge, 'gold', exportDate);
-      archive.append(certBuf, { name: `certificate_${idx + 1}.png` });
-      const stickerBuf = await generateSticker(student, badge);
-      archive.append(stickerBuf, { name: `sticker_${idx + 1}.png` });
-    }
-    await archive.finalize();
-  } catch (err) {
-    res.status(500).json({ error: '导出失败' });
+    res.set('Content-Type', 'image/png');
+    res.set('Content-Disposition', `attachment; filename="${encodeURIComponent(student.name)}_${type || 'cert'}.png"`);
+    return res.send(buf);
   }
-});
+
+  // 多个徽章 → ZIP
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', `attachment; filename="${encodeURIComponent(student.name)}_export.zip"`);
+  const archive = archiver('zip');
+  
+  // 将压缩流中的错误也接管到 next
+  archive.on('error', (err) => { throw err; });
+  archive.pipe(res);
+
+  for (const idx of indexes) {
+    const badge = badges[idx];
+    if (!badge) continue;
+    const certBuf = await generateCertificate(student, badge, 'gold', exportDate);
+    archive.append(certBuf, { name: `certificate_${idx + 1}.png` });
+    const stickerBuf = await generateSticker(student, badge);
+    archive.append(stickerBuf, { name: `sticker_${idx + 1}.png` });
+  }
+  await archive.finalize();
+}));
 
 // 批量导出（全班）
-router.post('/batch', auth, requireActivated, async (req, res) => {
-  try {
-    const { class_id, type, date, max_badges } = req.body;
-    const cls = await Class.findOne({ where: { id: class_id, user_id: req.userId } });
-    if (!cls) return res.status(404).json({ error: '班级不存在' });
+router.post('/batch', auth, requireActivated, asyncHandler(async (req, res) => {
+  const { class_id, type, date, max_badges } = req.body;
+  const cls = await Class.findOne({ where: { id: class_id, user_id: req.userId } });
+  if (!cls) return res.status(404).json({ error: '班级不存在' });
 
-    const students = await Student.findAll({ where: { class_id } });
-    const exportDate = date || new Date().toISOString().split('T')[0];
+  const students = await Student.findAll({ where: { class_id } });
+  const exportDate = date || new Date().toISOString().split('T')[0];
 
-    res.set('Content-Type', 'application/zip');
-    res.set('Content-Disposition', `attachment; filename="batch_export.zip"`);
-    const archive = archiver('zip');
-    archive.pipe(res);
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', `attachment; filename="batch_export.zip"`);
+  const archive = archiver('zip');
+  
+  archive.on('error', (err) => { throw err; });
+  archive.pipe(res);
 
-    for (const student of students) {
-      const badges = student.badges || [];
-      if (!badges.length) continue;
+  for (const student of students) {
+    const badges = student.badges || [];
+    if (!badges.length) continue;
 
-      const selected = max_badges ? badges.slice(-max_badges) : badges;
-      for (let i = 0; i < selected.length; i++) {
-        const badge = selected[i];
-        const certBuf = await generateCertificate(student, badge, 'gold', exportDate);
-        archive.append(certBuf, { name: `${student.name}/certificate_${i + 1}.png` });
+    const selected = max_badges ? badges.slice(-max_badges) : badges;
+    for (let i = 0; i < selected.length; i++) {
+      const badge = selected[i];
+      const certBuf = await generateCertificate(student, badge, 'gold', exportDate);
+      archive.append(certBuf, { name: `${student.name}/certificate_${i + 1}.png` });
 
-        if (type === 'sticker' || type === 'both') {
-          const stickerBuf = await generateSticker(student, badge);
-          archive.append(stickerBuf, { name: `${student.name}/sticker_${i + 1}.png` });
-        }
+      if (type === 'sticker' || type === 'both') {
+        const stickerBuf = await generateSticker(student, badge);
+        archive.append(stickerBuf, { name: `${student.name}/sticker_${i + 1}.png` });
       }
     }
-
-    await archive.finalize();
-  } catch (err) {
-    res.status(500).json({ error: '批量导出失败' });
   }
-});
+
+  await archive.finalize();
+}));
 
 module.exports = router;

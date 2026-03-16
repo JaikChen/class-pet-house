@@ -7,6 +7,8 @@ const ShopItem = sequelize.define('ShopItem', {
   name: { type: DataTypes.STRING(50), allowNull: false },
   description: { type: DataTypes.STRING(200), defaultValue: '' },
   icon: { type: DataTypes.STRING(50), defaultValue: '🎁' },
+  // 核心新增：商品图片网络URL，预留足够长度
+  image: { type: DataTypes.STRING(1000), defaultValue: null }, 
   price: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
   stock: { type: DataTypes.INTEGER, defaultValue: -1 }
 }, { tableName: 'shop_items' });

@@ -1,9 +1,7 @@
 <template>
   <div>
-    <!-- 分组管理模式 -->
     <GroupManageView v-if="groupMode" @close="$emit('exit-group-mode')" />
 
-    <!-- 学生卡片网格 (普通模式) -->
     <div v-else class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-4 lg:gap-6 px-1 sm:px-0 py-2">
       <StudentCard
         v-for="(s, index) in filteredStudents" :key="s.id"
@@ -24,13 +22,11 @@
       />
     </div>
 
-    <!-- 空状态 -->
     <div v-if="!filteredStudents.length" class="text-center py-20 text-gray-400">
       <p class="text-4xl mb-2">🥚</p>
-      <p>还没有学生，去设置中添加吧</p>
+      <p>还没有符合条件的学生</p>
     </div>
 
-    <!-- 积分规则选择弹窗 -->
     <ScoreRuleModal
       v-if="showScoreModal"
       :student="selectedStudent"
@@ -38,7 +34,6 @@
       @scored="onScored"
     />
 
-    <!-- 宠物选择弹窗 -->
     <PetSelectModal
       v-if="showPetModal"
       :student="selectedStudent"
@@ -46,7 +41,6 @@
       @selected="onPetSelected"
     />
 
-    <!-- 毕业典礼弹窗 -->
     <GraduateModal
       v-if="showGraduateModal"
       :student="selectedStudent"
@@ -54,14 +48,12 @@
       @graduated="onGraduated"
     />
 
-    <!-- 徽章墙弹窗 -->
     <BadgeWall
       v-if="showBadgeWall"
       :student="selectedStudent"
       @close="showBadgeWall = false"
     />
 
-    <!-- 证书打印弹窗 -->
     <CertificateModal
       v-if="showCertificateModal"
       :show="showCertificateModal"
@@ -70,7 +62,6 @@
       @close="showCertificateModal = false"
     />
 
-    <!-- AI 评语弹窗 -->
     <AiEvaluateModal
       v-if="showAiEvaluate"
       :show="showAiEvaluate"
@@ -89,7 +80,6 @@ import ScoreRuleModal from '../components/ScoreRuleModal.vue'
 import PetSelectModal from '../components/PetSelectModal.vue'
 import GraduateModal from '../components/GraduateModal.vue'
 import BadgeWall from '../components/BadgeWall.vue'
-import OdometerNumber from '../components/OdometerNumber.vue'
 import CertificateModal from '../components/CertificateModal.vue'
 import AiEvaluateModal from '../components/AiEvaluateModal.vue'
 import GroupManageView from '../components/GroupManageView.vue'
@@ -120,13 +110,17 @@ const showAiEvaluate = ref(false)
 const selectedStudent = ref(null)
 const defaultStages = [0, 5, 10, 20, 30, 45, 60, 75, 90, 100]
 
+// 防止重复点击撤回操作的并发锁
+const isRevoking = ref(false)
+
 const filteredStudents = computed(() => {
-  // 必须在此处访问 classStore.students 触发依赖收集，不能在外部解构
-  let list = classStore.students.map(s => ({ ...s }))
+  // 核心优化：避免使用 .map(s => ({ ...s }))，直接使用浅拷贝扩展运算符
+  // 因为我们只是对数组进行过滤和排序，并不会直接修改对象的属性值
+  let list = [...classStore.students]
 
   // 搜索过滤
   if (props.searchQuery) {
-    const q = props.searchQuery.toLowerCase()
+    const q = props.searchQuery.toLowerCase().trim()
     list = list.filter(s => s.name.toLowerCase().includes(q))
   }
 
@@ -157,7 +151,6 @@ function handleCardClick(student) {
     return
   }
   if (props.undoMode) {
-    // 撤回该学生最后一次操作
     revokeLastAction(student)
     return
   }
@@ -170,14 +163,20 @@ function handleCardClick(student) {
 }
 
 async function revokeLastAction(student) {
+  if (isRevoking.value) return; // 拦截双击/连点
+  isRevoking.value = true;
   try {
     const { rows } = await api.get(`/history/class/${classStore.currentClass.id}?limit=1&student_id=${student.id}`)
-    if (rows?.length) {
+    if (rows && rows.length > 0) {
       await api.post('/history/revoke', { record_id: rows[0].id })
       await classStore.fetchStudents()
+    } else {
+      Dialog.alert('该学生暂无可撤回的记录');
     }
   } catch (err) {
-    Dialog.alert('撤回失败')
+    Dialog.alert(err?.error || '撤回失败')
+  } finally {
+    isRevoking.value = false;
   }
 }
 

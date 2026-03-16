@@ -2,15 +2,14 @@
   <div class="max-w-6xl mx-auto">
     <h2 class="text-xl font-bold text-gray-700 mb-4">🛍️ 小卖部</h2>
 
-    <!-- 商品列表 -->
     <div class="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
       <div v-for="(item, i) in items" :key="item.id"
         class="group bg-white/90 backdrop-blur-md rounded-[1.8rem] p-5 shadow-sm text-center border-2 border-white hover:border-[var(--theme-ring)]/40 hover:shadow-[0_15px_35px_-10px_var(--theme-ring)] hover:-translate-y-1 transition-all duration-300 animate-stagger-fade-in flex flex-col items-center"
         :style="{ animationDelay: `${i * 0.05}s` }">
         
-        <!-- Icon Squircle -->
-        <div class="w-16 h-16 rounded-[1.2rem] bg-slate-50 flex items-center justify-center text-4xl mb-3 shadow-inner group-hover:scale-110 transition-transform duration-300 group-hover:bg-theme-light">
-          {{ item.icon }}
+        <div class="w-16 h-16 rounded-[1.2rem] bg-slate-50 flex items-center justify-center text-4xl mb-3 shadow-inner group-hover:scale-110 transition-transform duration-300 group-hover:bg-theme-light overflow-hidden">
+          <img v-if="item.image" :src="item.image" class="w-full h-full object-cover" />
+          <span v-else>{{ item.icon || '🎁' }}</span>
         </div>
         
         <p class="text-base font-black text-slate-700 tracking-wide">{{ item.name }}</p>
@@ -35,7 +34,6 @@
       </div>
     </div>
 
-    <!-- 兑换弹窗（选择学生） -->
     <div v-if="showExchangeModal" class="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
       @click.self="showExchangeModal = false">
       <div class="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5">
@@ -56,20 +54,31 @@
       </div>
     </div>
 
-    <!-- 商品管理 -->
     <div class="bg-white/90 backdrop-blur-md rounded-[2rem] p-6 shadow-sm border-2 border-white mb-6">
-      <h3 class="font-black text-slate-700 mb-4 text-lg">⚙️ 商品管理</h3>
-      <div class="flex flex-col sm:flex-row gap-3">
+      <h3 class="font-black text-slate-700 mb-4 text-lg">⚙️ 添加新商品</h3>
+      
+      <div class="flex flex-col sm:flex-row gap-3 mb-3">
         <input v-model="newItem.name" placeholder="商品名称"
           class="flex-1 px-4 py-3 rounded-2xl border-2 border-slate-100 text-sm font-bold text-slate-600 outline-none focus:border-accent focus:bg-white transition-colors bg-slate-50" />
         <input v-model.number="newItem.price" type="number" placeholder="价格(徽章)" min="1"
           class="w-full sm:w-32 px-4 py-3 rounded-2xl border-2 border-slate-100 text-sm font-bold text-slate-600 outline-none focus:border-accent focus:bg-white transition-colors bg-slate-50" />
+        <input v-model="newItem.image" placeholder="商品图片网络URL(可选)"
+          class="flex-1 px-4 py-3 rounded-2xl border-2 border-slate-100 text-sm font-bold text-slate-600 outline-none focus:border-accent focus:bg-white transition-colors bg-slate-50" />
+      </div>
+      
+      <div class="flex gap-2 items-center flex-wrap">
+        <span class="text-xs font-bold text-slate-400">快捷图标:</span>
+        <button v-for="icon in presetIcons" :key="icon" @click="newItem.icon = icon; newItem.image = ''"
+          class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition text-lg"
+          :class="newItem.icon === icon && !newItem.image ? 'bg-slate-200 border border-slate-300' : 'bg-slate-50'">
+          {{ icon }}
+        </button>
+        <div class="flex-1"></div>
         <button @click="addItem"
-          class="px-6 py-3 bg-slate-800 text-white font-black rounded-2xl text-sm hover:bg-slate-700 hover:shadow-lg border-2 border-slate-800 hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap">➕ 添加商品</button>
+          class="px-6 py-3 bg-slate-800 text-white font-black rounded-2xl text-sm hover:bg-slate-700 hover:shadow-lg border-2 border-slate-800 hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap">➕ 确认添加</button>
       </div>
     </div>
 
-    <!-- 兑换记录 -->
     <div class="bg-white rounded-2xl p-5 shadow-sm">
       <h3 class="font-bold text-gray-700 mb-3">兑换记录</h3>
       <div v-for="r in records" :key="r.id"
@@ -91,11 +100,11 @@ import Dialog from '../utils/dialog'
 const classStore = useClassStore()
 const items = ref([])
 const records = ref([])
-const newItem = reactive({ name: '', price: 1 })
+const presetIcons = ['🎁','🍬','🍫','🍦','🍔','🍟','🍕','🍿','📚','✏️','🧸','🎮','🎫','🎟️']
+const newItem = reactive({ name: '', price: 1, icon: '🎁', image: '' })
 const showExchangeModal = ref(false)
 const exchangeTarget = ref(null)
 
-// ESC 关闭兑换弹窗
 function onEsc(e) { if (e.key === 'Escape') showExchangeModal.value = false }
 onMounted(() => window.addEventListener('keydown', onEsc))
 onUnmounted(() => window.removeEventListener('keydown', onEsc))
@@ -115,11 +124,14 @@ async function addItem() {
     const item = await api.post('/shop', {
       class_id: classStore.currentClass.id,
       name: newItem.name,
-      price: newItem.price
+      price: newItem.price,
+      icon: newItem.icon,
+      image: newItem.image
     })
     items.value.push(item)
     newItem.name = ''
     newItem.price = 1
+    newItem.image = ''
   } catch (err) { Dialog.alert(err.error || '添加失败') }
 }
 
@@ -145,7 +157,7 @@ async function confirmExchange(student) {
     })
     showExchangeModal.value = false
     Dialog.alert('兑换成功！')
-    // 刷新商品列表（库存变化）、兑换记录、学生数据（徽章变化）
+    
     const cid = classStore.currentClass.id
     await Promise.all([
       api.get(`/shop/class/${cid}`).then(d => items.value = d),

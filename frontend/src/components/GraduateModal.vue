@@ -14,7 +14,6 @@
         成功培养宠物毕业，获得一枚徽章！
       </p>
 
-      <!-- 宠物图片 -->
       <img v-if="petImage" :src="petImage"
         class="w-24 h-24 sm:w-32 sm:h-32 mx-auto object-contain animate-float mb-4" />
 
@@ -41,7 +40,7 @@ useEscClose(emit)
 const classStore = useClassStore()
 const loading = ref(false)
 
-const petImageUrl = computed(() => {
+const petImage = computed(() => {
   if (!props.student || !props.student.pet_type) return ''
   const pet = PETS.find(p => p.id === props.student.pet_type)
   return pet ? getPetImageUrl(pet.folder, 10) : ''
@@ -56,17 +55,24 @@ async function handleGraduate() {
       pet_name: props.student.pet_name,
       date: new Date().toISOString()
     })
+    
+    // 👑 核心修复：使用 Math.max 解决默认值 0 导致老数据徽章被清空的 Bug
+    const currentTotal = Math.max(props.student.total_badges || 0, props.student.badges?.length || 0)
+    
     await api.put(`/students/${props.student.id}`, {
       badges,
+      total_badges: currentTotal + 1, // 真正的累计增加
       food_count: 0,
       pet_type: null,
       pet_name: null
     })
+    
     await api.post('/history', {
       class_id: classStore.currentClass.id,
       student_ids: [props.student.id],
       type: 'graduate'
     }).catch(() => {})
+    
     emit('graduated')
   } catch (err) {
     Dialog.alert(err.error || '操作失败')

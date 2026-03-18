@@ -7,9 +7,9 @@ export default defineConfig({
   server: {
     host: true,
     proxy: {
-      '/api': 'http://localhost:3000',
-      '/pet-images': 'http://localhost:3000',
-      '/动物图片': 'http://localhost:3000'
+      '/api': 'http://127.0.0.1:3000',         
+      '/pet-images': 'http://127.0.0.1:3000',    
+      '/动物图片': 'http://127.0.0.1:3000'        
     }
   }
 })
